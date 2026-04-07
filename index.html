@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DriveMail — RMD Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #fdf7fc;
+    --surface2: #f7eef6;
+    --surface3: #f0e0ef;
+    --border: #e8d4e8;
+    --fuchsia: #cc2196;
+    --fuchsia-light: #e040b0;
+    --fuchsia-dim: rgba(204,33,150,0.08);
+    --fuchsia-glow: rgba(204,33,150,0.2);
+    --black: #1a1a1a;
+    --black2: #2d2d2d;
+    --text: #1a1a1a;
+    --text-muted: #9a7a96;
+    --text-light: #c4a8c0;
+    --success: #2a6e46;
+    --red: #c0392b;
+    --border-focus: var(--fuchsia);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh; overflow-x: hidden;
+  }
+
+  /* subtle fuchsia tint at top */
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 30% at 50% 0%, rgba(204,33,150,0.04) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  #app { position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(16px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo-wrap { display: flex; align-items: center; gap: 12px; }
+
+  .logo-rmd {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem; font-weight: 700;
+    letter-spacing: 6px; color: var(--fuchsia);
+    text-transform: uppercase;
+  }
+
+  .logo-divider { width: 1px; height: 20px; background: var(--border); }
+
+  .logo-sub {
+    font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 3px; color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 7px 14px;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text-muted);
+  }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
+  .status-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(42,110,70,0.4); }
+  .status-dot.listening { background: var(--fuchsia); box-shadow: 0 0 8px var(--fuchsia-glow); animation: blink 0.7s infinite; }
+  .status-dot.thinking { background: var(--fuchsia); box-shadow: 0 0 8px var(--fuchsia-glow); animation: blink 0.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; top: 68px; left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background: var(--black); border-radius: 8px; padding: 11px 20px;
+    font-size: 0.83rem; font-weight: 600; color: #fff;
+    opacity: 0; transition: all 0.25s;
+    z-index: 999; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── LOGIN ── */
+  #loginScreen {
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center; padding: 60px 24px 40px;
+    min-height: calc(100vh - 60px);
+  }
+
+  .login-logo {
+    width: 82px; height: 82px; border-radius: 50%;
+    border: 2px solid var(--fuchsia);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.2rem; margin-bottom: 26px;
+    background: var(--surface);
+    box-shadow: 0 0 30px var(--fuchsia-dim);
+  }
+
+  .login-brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem; font-weight: 600; letter-spacing: 6px;
+    color: var(--fuchsia); text-transform: uppercase; margin-bottom: 10px;
+  }
+
+  .login-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3rem; font-weight: 700; letter-spacing: 1px;
+    color: var(--black); margin-bottom: 12px; line-height: 1;
+  }
+
+  .login-sub { color: var(--text-muted); font-size: 0.92rem; line-height: 1.65; max-width: 280px; margin-bottom: 44px; }
+
+  .btn-main {
+    background: var(--fuchsia); color: #fff;
+    font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    border: none; border-radius: 4px; padding: 20px 40px;
+    cursor: pointer; width: 100%; max-width: 340px;
+    transition: all 0.2s; margin-bottom: 12px;
+    box-shadow: 0 4px 20px var(--fuchsia-glow);
+  }
+  .btn-main:active { opacity: 0.85; transform: scale(0.98); }
+
+  .btn-demo {
+    background: transparent; color: var(--fuchsia);
+    font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    border: 1px solid var(--fuchsia); border-radius: 4px; padding: 18px 40px;
+    cursor: pointer; width: 100%; max-width: 340px; transition: all 0.2s;
+  }
+  .btn-demo:active { background: var(--fuchsia-dim); }
+
+  .config-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 22px; margin-top: 20px;
+    width: 100%; max-width: 380px; display: none; text-align: left;
+  }
+  .config-panel.show { display: block; }
+  .config-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--fuchsia); margin-bottom: 16px; }
+  .field-label { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; margin-top: 14px; }
+  .field-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem; outline: none; transition: border-color 0.2s; }
+  .field-input:focus { border-color: var(--fuchsia); }
+  .btn-connect { margin-top: 16px; background: var(--fuchsia); color: #fff; font-weight: 700; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; border: none; border-radius: 4px; padding: 16px; width: 100%; cursor: pointer; }
+
+  /* ── INBOX ── */
+  .inbox-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 10px; }
+  .inbox-title { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 600; letter-spacing: 1px; color: var(--black); }
+  .refresh-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; padding: 10px 16px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+  .refresh-btn:active { border-color: var(--fuchsia); color: var(--fuchsia); }
+
+  .email-list { padding: 0 14px 160px; }
+
+  .thread-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 10px;
+    cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden;
+  }
+  .thread-card::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; }
+  .thread-card.unread { background: var(--surface); }
+  .thread-card.unread::after { background: var(--fuchsia); }
+  .thread-card:active { background: var(--surface2); }
+
+  .thread-main { padding: 16px 16px 12px; }
+  .thread-row1 { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .thread-from { font-weight: 700; font-size: 0.92rem; color: var(--black); flex: 1; margin-right: 10px; }
+  .thread-time { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; padding-top: 1px; }
+  .thread-subject { font-size: 0.88rem; font-weight: 500; color: var(--black2); margin-bottom: 4px; }
+  .thread-preview { font-size: 0.78rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thread-footer { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px; border-top: 1px solid var(--border); }
+  .thread-count { font-size: 0.68rem; font-weight: 600; color: var(--text-muted); }
+  .count-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 0.68rem; font-weight: 700; color: var(--fuchsia); margin-right: 6px; }
+  .ai-badge { font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--fuchsia); background: var(--fuchsia-dim); border: 1px solid rgba(204,33,150,0.15); border-radius: 4px; padding: 2px 8px; }
+  .unread-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--fuchsia); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 4px var(--fuchsia-glow); }
+
+  /* ── READ SCREEN ── */
+  #readScreen { padding-bottom: 280px; }
+  .read-header { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); }
+  .back-btn { background: none; border: none; color: var(--fuchsia); font-family: 'DM Sans', sans-serif; font-size: 0.75rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; padding: 0; margin-bottom: 14px; display: flex; align-items: center; gap: 5px; }
+  .read-subject { font-family: 'Cormorant Garamond', serif; font-size: 1.6rem; font-weight: 700; line-height: 1.2; margin-bottom: 4px; color: var(--black); }
+  .read-meta { font-size: 0.78rem; color: var(--text-muted); }
+
+  /* ── AI SUMMARY ── */
+  .summary-box {
+    margin: 14px 14px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--fuchsia);
+    border-radius: 4px; padding: 16px;
+  }
+  .summary-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .summary-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--fuchsia); }
+  .summary-text { font-size: 0.92rem; line-height: 1.75; color: var(--black2); }
+  .summary-thinking { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+  .think-dots span { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--fuchsia); margin: 0 2px; animation: dot-bounce 1.2s infinite; }
+  .think-dots span:nth-child(2){animation-delay:0.2s} .think-dots span:nth-child(3){animation-delay:0.4s}
+  @keyframes dot-bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+  /* ── WHAT'S NEXT PROMPT ── */
+  .whats-next {
+    margin: 12px 14px 0;
+    background: var(--fuchsia-dim); border: 1px solid rgba(204,33,150,0.2);
+    border-radius: 4px; padding: 14px 16px;
+    display: none; align-items: center; gap: 12px;
+  }
+  .whats-next.show { display: flex; }
+  .whats-next-text { font-size: 0.85rem; font-weight: 600; color: var(--fuchsia); flex: 1; }
+  .whats-next-hint { font-size: 0.7rem; color: var(--text-muted); font-style: italic; }
+
+  /* ── REPLY PANEL ── */
+  .reply-panel {
+    margin: 12px 14px 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px; display: none;
+  }
+  .reply-panel.show { display: block; }
+
+  .reply-panel-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .reply-panel-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--fuchsia); }
+  .reply-to { font-size: 0.78rem; color: var(--text-muted); }
+
+  /* Textarea for typing fallback */
+  .reply-textarea {
+    width: 100%; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 12px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 0.92rem;
+    line-height: 1.6; outline: none; resize: none;
+    min-height: 90px; transition: border-color 0.2s;
+  }
+  .reply-textarea:focus { border-color: var(--fuchsia); }
+  .reply-textarea::placeholder { color: var(--text-light); font-style: italic; }
+
+  .reply-mic-hint {
+    font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .reply-mic-hint.recording { color: var(--fuchsia); }
+
+  .reply-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-send { flex: 1; background: var(--fuchsia); border: none; border-radius: 4px; color: #fff; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 15px; cursor: pointer; box-shadow: 0 2px 12px var(--fuchsia-glow); }
+  .btn-send:active { opacity: 0.85; }
+  .btn-cancel-reply { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 600; padding: 15px; cursor: pointer; }
+
+  /* Sent confirmation */
+  .sent-confirm {
+    background: rgba(42,110,70,0.06); border: 1px solid rgba(42,110,70,0.2);
+    border-radius: 4px; padding: 14px 16px; display: none;
+    margin: 12px 14px 0;
+  }
+  .sent-confirm.show { display: block; }
+  .sent-confirm-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--success); margin-bottom: 8px; }
+  .sent-confirm-to { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 6px; }
+  .sent-confirm-body { font-size: 0.88rem; color: var(--black2); line-height: 1.6; }
+
+  /* ── FOLDER PICKER ── */
+  .folder-picker { display: none; margin: 12px 14px 0; }
+  .folder-picker.show { display: block; }
+  .folder-title { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; padding: 0 2px; }
+  .folder-list { display: flex; flex-direction: column; gap: 6px; }
+  .folder-item { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 13px 16px; font-size: 0.88rem; font-weight: 600; color: var(--black2); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 10px; }
+  .folder-item:active { border-color: var(--fuchsia); color: var(--fuchsia); background: var(--fuchsia-dim); }
+
+  /* ── VOICE SELECTOR ── */
+  .voice-bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border); margin-top: 12px; }
+  .voice-bar-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); min-width: 44px; }
+  .voice-select { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; color: var(--black); font-family: 'DM Sans', sans-serif; font-size: 0.85rem; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23cc2196' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+  .voice-select:focus { border-color: var(--fuchsia); }
+
+  /* ── SPEED BAR ── */
+  .speed-bar { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .speed-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); min-width: 44px; }
+  .speed-display { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-weight: 600; color: var(--fuchsia); min-width: 44px; text-align: center; }
+  input[type=range] { flex: 1; -webkit-appearance: none; height: 2px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: var(--fuchsia); cursor: pointer; border: 3px solid white; box-shadow: 0 1px 6px var(--fuchsia-glow); }
+
+  /* ── THREAD MESSAGES ── */
+  .thread-messages { padding: 14px 14px 0; }
+  .thread-msg-header { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; padding-left: 2px; }
+  .msg-card { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 14px; margin-bottom: 8px; }
+  .msg-from { font-weight: 700; font-size: 0.85rem; color: var(--fuchsia); margin-bottom: 2px; }
+  .msg-time { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px; }
+  .msg-body { font-size: 0.85rem; line-height: 1.75; color: var(--black2); white-space: pre-wrap; }
+
+  /* ── WAVE ── */
+  .wave-row { display: none; align-items: center; justify-content: center; gap: 3px; height: 18px; margin: 0 0 6px; }
+  .wave-row.show { display: flex; }
+  .wave-bar { width: 3px; background: var(--fuchsia); border-radius: 2px; animation: wave 0.7s ease-in-out infinite; }
+  .wave-bar:nth-child(1){height:5px;animation-delay:0s}
+  .wave-bar:nth-child(2){height:12px;animation-delay:0.1s}
+  .wave-bar:nth-child(3){height:18px;animation-delay:0.2s}
+  .wave-bar:nth-child(4){height:12px;animation-delay:0.3s}
+  .wave-bar:nth-child(5){height:5px;animation-delay:0.4s}
+  @keyframes wave { 0%,100%{transform:scaleY(0.4)} 50%{transform:scaleY(1)} }
+
+  /* ── PLAYER BAR ── */
+  .player-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(255,255,255,0.98); backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding: 12px 18px 28px; z-index: 200;
+  }
+  .player-controls { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+  .ctrl-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; height: 68px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; transition: all 0.15s; color: var(--black); }
+  .ctrl-btn:active { background: var(--surface2); transform: scale(0.94); }
+  .ctrl-btn.play { background: var(--fuchsia); border: none; color: #fff; font-size: 1.7rem; box-shadow: 0 3px 14px var(--fuchsia-glow); }
+  .ctrl-btn.play:active { opacity: 0.85; }
+  .ctrl-btn.record { background: var(--surface); border: 1.5px solid var(--fuchsia); color: var(--fuchsia); font-size: 1.7rem; }
+  .ctrl-btn.record.active { background: var(--fuchsia); border-color: var(--fuchsia); color: #fff; animation: rec-pulse 0.9s infinite; }
+  @keyframes rec-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  .btn-labels { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .btn-label { text-align: center; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.8px; color: var(--text-muted); text-transform: uppercase; }
+
+  /* ── LOADING ── */
+  .loading { text-align: center; padding: 50px 20px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; font-size: 0.78rem; font-weight: 700; }
+  .spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--fuchsia); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="header">
+    <div class="logo-wrap">
+      <div class="logo-rmd">RMD</div>
+      <div class="logo-divider"></div>
+      <div class="logo-sub">Drive Mail</div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Offline</span>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- LOGIN -->
+  <div id="loginScreen" class="screen active">
+    <div class="login-logo">📬</div>
+    <div class="login-brand">RMD Group</div>
+    <div class="login-title">Drive Mail</div>
+    <div class="login-sub">Your inbox, read aloud. Hands-free email for the road.</div>
+    <button class="btn-main" onclick="showConfig()">Connect Outlook</button>
+    <button class="btn-demo" onclick="startDemo()">Try Demo</button>
+    <div class="config-panel" id="configPanel">
+      <div class="config-title">Azure Credentials</div>
+      <label class="field-label">Client ID</label>
+      <input class="field-input" id="clientId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      <label class="field-label">Tenant ID</label>
+      <input class="field-input" id="tenantId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      <button class="btn-connect" onclick="connectOutlook()">Connect →</button>
+    </div>
+  </div>
+
+  <!-- INBOX -->
+  <div id="inboxScreen" class="screen">
+    <div class="inbox-header">
+      <div class="inbox-title">Inbox</div>
+      <button class="refresh-btn" onclick="loadEmails()">↻ Refresh</button>
+    </div>
+    <div class="email-list" id="emailList">
+      <div class="loading"><div class="spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- READ VIEW -->
+  <div id="readScreen" class="screen">
+    <div class="read-header">
+      <button class="back-btn" onclick="showInbox()">← Inbox</button>
+      <div class="read-subject" id="readSubject"></div>
+      <div class="read-meta" id="readMeta"></div>
+    </div>
+
+    <!-- AI Summary -->
+    <div class="summary-box">
+      <div class="summary-header">
+        <span class="summary-label">AI Summary</span>
+      </div>
+      <div id="summaryContent">
+        <div class="summary-thinking">Summarizing <div class="think-dots"><span></span><span></span><span></span></div></div>
+      </div>
+    </div>
+
+    <!-- What's next — shows after reading, voice only -->
+    <div class="whats-next" id="whatsNext">
+      <div>
+        <div class="whats-next-text">🎙 What would you like to do?</div>
+        <div class="whats-next-hint">Say "Reply", "Unread", "File", or "Next"</div>
+      </div>
+    </div>
+
+    <!-- Reply panel -->
+    <div class="reply-panel" id="replyPanel">
+      <div class="reply-panel-header">
+        <span class="reply-panel-label">🎙 Your Reply</span>
+        <span class="reply-to" id="replyTo"></span>
+      </div>
+      <textarea class="reply-textarea" id="replyTextarea" placeholder="Speak your reply (mic button below) or type it here..."></textarea>
+      <div class="reply-mic-hint" id="replyMicHint">🎙 Tap the mic button below to speak, or just type above</div>
+      <div class="reply-actions">
+        <button class="btn-cancel-reply" onclick="cancelReply()">Cancel</button>
+        <button class="btn-send" onclick="sendReply()">Send Reply</button>
+      </div>
+    </div>
+
+    <!-- Sent confirmation -->
+    <div class="sent-confirm" id="sentConfirm">
+      <div class="sent-confirm-label">✓ Reply Sent</div>
+      <div class="sent-confirm-to" id="sentTo"></div>
+      <div class="sent-confirm-body" id="sentBody"></div>
+    </div>
+
+    <!-- Folder picker -->
+    <div class="folder-picker" id="folderPicker">
+      <div class="folder-title">Move to folder — say or tap</div>
+      <div class="folder-list">
+        <div class="folder-item" onclick="fileEmail('Follow Up')">⭐ Follow Up</div>
+        <div class="folder-item" onclick="fileEmail('Projects')">💼 Projects</div>
+        <div class="folder-item" onclick="fileEmail('Clients')">🤝 Clients</div>
+        <div class="folder-item" onclick="fileEmail('Archive')">🗂 Archive</div>
+      </div>
+    </div>
+
+    <!-- Voice selector -->
+    <div class="voice-bar">
+      <div class="voice-bar-label">Voice</div>
+      <select class="voice-select" id="voiceSelect" onchange="onVoiceChange()">
+        <option value="">Loading voices...</option>
+      </select>
+    </div>
+
+    <!-- Speed -->
+    <div class="speed-bar">
+      <div class="speed-label">Speed</div>
+      <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="onSpeedChange(this.value)">
+      <div class="speed-display" id="speedDisplay">1.0×</div>
+    </div>
+
+    <!-- Thread messages -->
+    <div class="thread-messages">
+      <div class="thread-msg-header" id="msgHeader"></div>
+      <div id="msgList"></div>
+    </div>
+
+    <!-- Player bar -->
+    <div class="player-bar">
+      <div class="wave-row" id="waveRow">
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+      <div class="player-controls">
+        <button class="ctrl-btn" onclick="skipBack()">⟵</button>
+        <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()">▶</button>
+        <button class="ctrl-btn record" id="recordBtn" onclick="toggleMic()">🎙</button>
+        <button class="ctrl-btn" onclick="nextThread()">⟶</button>
+      </div>
+      <div class="btn-labels">
+        <div class="btn-label">Restart</div>
+        <div class="btn-label" id="playLabel">Play</div>
+        <div class="btn-label" id="micLabel">Voice</div>
+        <div class="btn-label">Next</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+// ── STATE ──
+let threads = [], currentThreadIdx = 0;
+let accessToken = null, demoMode = false;
+let isSpeaking = false, speechRate = 1.0, selectedVoice = null;
+let currentSummary = '';
+let appState = 'idle'; // idle | awaiting_command | replying | filing
+let recognition = null, isRecording = false;
+
+// ── DEMO DATA ──
+const demoEmails = [
+  { id:'t1a', conversationId:'conv1', isRead:false,
+    receivedDateTime: new Date(Date.now()-1800000).toISOString(),
+    from:{emailAddress:{name:'Sarah Johnson',address:'sarah@example.com'}},
+    subject:'Q2 Sales Review — Action Items',
+    bodyPreview:'Hi Mike, following up from this morning\'s call. Team hit 107% of quota...',
+    body:{content:'Hi Mike,\n\nFollowing up from this morning\'s call. The team hit 107% of quota this quarter — fantastic. I wanted to lock in the review meeting for next Thursday at 2pm.\n\nCan you confirm your availability? Also, please bring the Toast POS comparison deck. Leadership wants the competitive breakdown before Q3 planning.\n\nThanks,\nSarah'},
+    toRecipients:[{emailAddress:{address:'mike@rmdgroupsd.com'}}]
+  },
+  { id:'t1b', conversationId:'conv1', isRead:false,
+    receivedDateTime: new Date(Date.now()-3600000).toISOString(),
+    from:{emailAddress:{name:'Mike',address:'mike@rmdgroupsd.com'}},
+    subject:'Re: Q2 Sales Review — Action Items',
+    bodyPreview:'Sarah, Thursday at 2pm works. I\'ll have the deck ready...',
+    body:{content:'Sarah,\n\nThursday at 2pm works. I\'ll have the deck ready. Should I also pull the Incentivio numbers for comparison?\n\nMike'},
+    toRecipients:[{emailAddress:{address:'sarah@example.com'}}]
+  },
+  { id:'t1c', conversationId:'conv1', isRead:false,
+    receivedDateTime: new Date(Date.now()-5400000).toISOString(),
+    from:{emailAddress:{name:'Sarah Johnson',address:'sarah@example.com'}},
+    subject:'Re: Q2 Sales Review — Action Items',
+    bodyPreview:'Yes! Include Incentivio. Also cc David from leadership...',
+    body:{content:'Yes! Include Incentivio numbers. Also please cc David from leadership when you send the deck preview.\n\nSee you Thursday!\nSarah'},
+    toRecipients:[{emailAddress:{address:'mike@rmdgroupsd.com'}}]
+  },
+  { id:'t2a', conversationId:'conv2', isRead:true,
+    receivedDateTime: new Date(Date.now()-86400000).toISOString(),
+    from:{emailAddress:{name:'Lisa Park',address:'lisa@example.com'}},
+    subject:'Riverside Group Contract',
+    bodyPreview:'Mike, legal has finished reviewing the contract...',
+    body:{content:'Mike,\n\nLegal finished reviewing the Riverside Group contract. Two minor redlines on the indemnification clause but nothing deal-breaking. Sent to DocuSign.\n\nShould be signed by EOD tomorrow.\n\nLisa'},
+    toRecipients:[{emailAddress:{address:'mike@rmdgroupsd.com'}}]
+  },
+  { id:'t2b', conversationId:'conv2', isRead:true,
+    receivedDateTime: new Date(Date.now()-90000000).toISOString(),
+    from:{emailAddress:{name:'Mike',address:'mike@rmdgroupsd.com'}},
+    subject:'Re: Riverside Group Contract',
+    bodyPreview:'Great news. Let me know once it\'s signed...',
+    body:{content:'Lisa,\n\nGreat news. Let me know once it\'s countersigned — I\'ll loop in onboarding right away.\n\nMike'},
+    toRecipients:[{emailAddress:{address:'lisa@example.com'}}]
+  },
+  { id:'s1', conversationId:'conv3', isRead:false,
+    receivedDateTime: new Date(Date.now()-7200000).toISOString(),
+    from:{emailAddress:{name:'Tom Richards',address:'tom@example.com'}},
+    subject:'Incentivio Demo — Thursday 3pm',
+    bodyPreview:'Hey Mike, confirming the demo is still on...',
+    body:{content:'Hey Mike,\n\nJust confirming the Incentivio demo is still on for Thursday at 3pm. The prospect wants a side-by-side with Toast on the loyalty module.\n\nLet me know if anything changes.\n\nTom'},
+    toRecipients:[{emailAddress:{address:'mike@rmdgroupsd.com'}}]
+  },
+  { id:'s2', conversationId:'conv4', isRead:true,
+    receivedDateTime: new Date(Date.now()-172800000).toISOString(),
+    from:{emailAddress:{name:'Alex Kim',address:'alex@example.com'}},
+    subject:'Onboarding Timeline Question',
+    bodyPreview:'The new restaurant client is asking about the POS integration timeline...',
+    body:{content:'Hi Mike,\n\nThe new restaurant client is asking about the POS integration timeline. They want to go live before the summer rush starting June 1st. Is that realistic?\n\nAlex'},
+    toRecipients:[{emailAddress:{address:'mike@rmdgroupsd.com'}}]
+  }
+];
+
+// ── UTILS ──
+function showToast(msg, ms=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+function formatTime(iso) {
+  const d = new Date(iso), diff = Date.now() - d;
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function setStatus(state, label) {
+  document.getElementById('statusDot').className = 'status-dot' +
+    (state==='connected'?' connected':state==='listening'?' listening':state==='thinking'?' thinking':'');
+  document.getElementById('statusText').textContent =
+    label || ({connected:'Connected',listening:'Listening',thinking:'Thinking'}[state]||'Offline');
+}
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+  const el = document.getElementById(id);
+  el.style.display='block'; el.classList.add('active');
+}
+
+// ── VOICE ──
+function populateVoices() {
+  const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  const sel = document.getElementById('voiceSelect');
+  if (!voices.length) return;
+  sel.innerHTML = voices.map((v,i) => `<option value="${i}">${v.name} (${v.lang})</option>`).join('');
+  const pref = voices.findIndex(v => v.name.includes('Samantha') || (v.lang==='en-US' && v.localService));
+  if (pref >= 0) { sel.value = pref; selectedVoice = voices[pref]; }
+  else { selectedVoice = voices[0]; }
+}
+function onVoiceChange() {
+  const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  selectedVoice = voices[parseInt(document.getElementById('voiceSelect').value)] || null;
+  if (isSpeaking) { stopSpeech(); setTimeout(readSummary, 150); }
+}
+
+// ── THREADS ──
+function groupIntoThreads(emails) {
+  const map = {};
+  emails.forEach(e => { const cid = e.conversationId||e.id; if (!map[cid]) map[cid]=[]; map[cid].push(e); });
+  return Object.values(map)
+    .map(msgs => msgs.sort((a,b)=>new Date(a.receivedDateTime)-new Date(b.receivedDateTime)))
+    .sort((a,b)=>new Date(b[b.length-1].receivedDateTime)-new Date(a[a.length-1].receivedDateTime));
+}
+
+// ── AUTH ──
+function showConfig() { document.getElementById('configPanel').classList.toggle('show'); }
+function startDemo() { demoMode=true; setStatus('connected','Demo'); showScreen('inboxScreen'); loadEmails(); }
+function connectOutlook() {
+  const cid=document.getElementById('clientId').value.trim(), tid=document.getElementById('tenantId').value.trim();
+  if (!cid||!tid) { showToast('Enter your Client ID and Tenant ID'); return; }
+  const redirect=encodeURIComponent(location.href.split('?')[0]);
+  const scope=encodeURIComponent('https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite');
+  location.href=`https://login.microsoftonline.com/${tid}/oauth2/v2.0/authorize?client_id=${cid}&response_type=token&redirect_uri=${redirect}&scope=${scope}&response_mode=fragment`;
+}
+function checkToken() {
+  if (location.hash.includes('access_token')) {
+    const p=new URLSearchParams(location.hash.substring(1));
+    accessToken=p.get('access_token'); location.hash='';
+    setStatus('connected'); showScreen('inboxScreen'); loadEmails();
+  }
+}
+
+// ── LOAD ──
+async function loadEmails() {
+  document.getElementById('emailList').innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
+  let raw=[];
+  if (demoMode) { raw=demoEmails; }
+  else {
+    if (!accessToken) return;
+    try {
+      const res=await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=50&$select=id,subject,from,bodyPreview,receivedDateTime,isRead,toRecipients,body,conversationId&$orderby=receivedDateTime desc',{headers:{Authorization:`Bearer ${accessToken}`}});
+      raw=(await res.json()).value||[];
+    } catch(e) { document.getElementById('emailList').innerHTML='<div class="loading">Failed to load.</div>'; return; }
+  }
+  threads=groupIntoThreads(raw); renderThreads();
+}
+
+function renderThreads() {
+  const list=document.getElementById('emailList');
+  if (!threads.length) { list.innerHTML='<div class="loading">Inbox is empty</div>'; return; }
+  list.innerHTML=threads.map((thread,i)=>{
+    const latest=thread[thread.length-1];
+    const hasUnread=thread.some(e=>!e.isRead);
+    const count=thread.length;
+    const participants=[...new Set(thread.map(e=>e.from.emailAddress.name))].slice(0,3).join(', ');
+    return `<div class="thread-card ${hasUnread?'unread':''}" onclick="openThread(${i})">
+      <div class="thread-main">
+        <div class="thread-row1">
+          <div class="thread-from">${hasUnread?'<span class="unread-dot"></span>':''}${latest.from.emailAddress.name}</div>
+          <div class="thread-time">${formatTime(latest.receivedDateTime)}</div>
+        </div>
+        <div class="thread-subject">${latest.subject.replace(/^(Re:|Fwd:)\s*/i,'')}</div>
+        <div class="thread-preview">${latest.bodyPreview}</div>
+      </div>
+      <div class="thread-footer">
+        <div class="thread-count">${count>1?`<span class="count-badge">${count}</span>`:''}${participants}</div>
+        ${count>1?'<div class="ai-badge">AI Summary</div>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── OPEN THREAD ──
+async function openThread(idx) {
+  currentThreadIdx=idx;
+  const thread=threads[idx];
+  const latest=thread[thread.length-1];
+  const cleanSubject=latest.subject.replace(/^(Re:|Fwd:)\s*/i,'');
+
+  stopSpeech(); stopRecognition(); appState='idle';
+
+  document.getElementById('readSubject').textContent=cleanSubject;
+  document.getElementById('readMeta').textContent=thread.length>1
+    ? `${thread.length} messages · ${[...new Set(thread.map(e=>e.from.emailAddress.name))].join(', ')}`
+    : `From: ${latest.from.emailAddress.name} · ${formatTime(latest.receivedDateTime)}`;
+
+  document.getElementById('msgHeader').textContent=thread.length>1?`${thread.length} messages in thread`:'Message';
+  document.getElementById('msgList').innerHTML=thread.map(msg=>`
+    <div class="msg-card">
+      <div class="msg-from">${msg.from.emailAddress.name}</div>
+      <div class="msg-time">${new Date(msg.receivedDateTime).toLocaleString()}</div>
+      <div class="msg-body">${(msg.body?msg.body.content:msg.bodyPreview).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}</div>
+    </div>`).join('');
+
+  // Reset all panels
+  document.getElementById('playBtn').textContent='▶';
+  document.getElementById('playLabel').textContent='Play';
+  document.getElementById('waveRow').classList.remove('show');
+  document.getElementById('whatsNext').classList.remove('show');
+  document.getElementById('replyPanel').classList.remove('show');
+  document.getElementById('sentConfirm').classList.remove('show');
+  document.getElementById('folderPicker').classList.remove('show');
+  document.getElementById('replyTextarea').value='';
+  document.getElementById('micLabel').textContent='Voice';
+
+  document.getElementById('summaryContent').innerHTML=`<div class="summary-thinking">Summarizing <div class="think-dots"><span></span><span></span><span></span></div></div>`;
+  currentSummary='';
+
+  showScreen('readScreen');
+  await generateSummary(thread);
+}
+
+// ── AI SUMMARY ──
+async function generateSummary(thread) {
+  setStatus('thinking','Summarizing');
+  const threadText=thread.map(msg=>{
+    const body=(msg.body?msg.body.content:msg.bodyPreview).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    return `From: ${msg.from.emailAddress.name}\nDate: ${new Date(msg.receivedDateTime).toLocaleString()}\n\n${body}`;
+  }).join('\n\n---\n\n');
+
+  const prompt=`Summarize this email thread for someone driving. Be brief and conversational — like a colleague catching them up. Cover who said what, key points, and any action items for Mike. Under 60 words. No bullet points.\n\nTHREAD:\n${threadText}`;
+
+  try {
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const summary=data.content?.find(b=>b.type==='text')?.text||'';
+    if (summary) { currentSummary=summary; document.getElementById('summaryContent').innerHTML=`<div class="summary-text">${summary}</div>`; setStatus('connected'); setTimeout(readSummary,400); }
+    else throw new Error('empty');
+  } catch(e) {
+    const b=(thread[thread.length-1].body?thread[thread.length-1].body.content:thread[thread.length-1].bodyPreview).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    currentSummary=b.substring(0,280)+(b.length>280?'...':'');
+    document.getElementById('summaryContent').innerHTML=`<div class="summary-text">${currentSummary}</div>`;
+    setStatus('connected'); setTimeout(readSummary,400);
+  }
+}
+
+// ── SPEECH ──
+function readSummary() {
+  if (!currentSummary) return;
+  const thread=threads[currentThreadIdx];
+  const latest=thread[thread.length-1];
+  const cleanSubject=latest.subject.replace(/^(Re:|Fwd:)\s*/i,'');
+  const prefix=thread.length>1?`Thread: ${cleanSubject}. ${thread.length} messages. `:`Email from ${latest.from.emailAddress.name}. `;
+  speak(prefix+currentSummary, onReadingDone);
+}
+
+function onReadingDone() {
+  // After reading, just ask verbally — no buttons
+  document.getElementById('whatsNext').classList.add('show');
+  speak('What would you like to do?', startCommandListening);
+}
+
+function speak(text, onDone) {
+  stopSpeech();
+  const utt=new SpeechSynthesisUtterance(text);
+  utt.rate=speechRate; utt.pitch=1;
+  if (selectedVoice) utt.voice=selectedVoice;
+  utt.onstart=()=>{ isSpeaking=true; document.getElementById('playBtn').textContent='⏸'; document.getElementById('playLabel').textContent='Pause'; document.getElementById('waveRow').classList.add('show'); setStatus('connected','Reading...'); };
+  utt.onend=utt.onerror=()=>{ isSpeaking=false; document.getElementById('playBtn').textContent='▶'; document.getElementById('playLabel').textContent='Re-read'; document.getElementById('waveRow').classList.remove('show'); setStatus('connected'); if (onDone) onDone(); };
+  speechSynthesis.speak(utt);
+}
+
+function stopSpeech() {
+  speechSynthesis.cancel(); isSpeaking=false;
+  document.getElementById('playBtn').textContent='▶';
+  document.getElementById('playLabel').textContent='Play';
+  document.getElementById('waveRow').classList.remove('show');
+}
+
+function togglePlay() { isSpeaking ? stopSpeech() : readSummary(); }
+function skipBack() { stopSpeech(); setTimeout(readSummary,200); }
+function nextThread() { if (currentThreadIdx<threads.length-1) openThread(currentThreadIdx+1); else showToast('Last thread in inbox'); }
+function onSpeedChange(val) { speechRate=parseFloat(val); document.getElementById('speedDisplay').textContent=speechRate.toFixed(1)+'×'; if (isSpeaking) { stopSpeech(); setTimeout(readSummary,150); } }
+function showInbox() { stopSpeech(); stopRecognition(); showScreen('inboxScreen'); }
+
+// ── MIC BUTTON ──
+function toggleMic() {
+  if (isRecording) { stopRecognition(); return; }
+  // Context-aware mic
+  if (appState==='replying') {
+    startReplyListening();
+  } else if (appState==='filing') {
+    startFolderListening();
+  } else {
+    // Show what's next and listen for command
+    document.getElementById('whatsNext').classList.add('show');
+    startCommandListening();
+  }
+}
+
+// ── VOICE COMMANDS ──
+function startCommandListening() {
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if (!SR) { showToast('Voice not supported — type your reply instead'); return; }
+  stopRecognition(); appState='awaiting_command';
+  recognition=new SR(); recognition.lang='en-US'; recognition.continuous=false; recognition.interimResults=false;
+  recognition.onstart=()=>{ isRecording=true; setStatus('listening','Listening'); document.getElementById('recordBtn').classList.add('active'); document.getElementById('micLabel').textContent='Stop'; };
+  recognition.onresult=(ev)=>handleVoiceCommand(ev.results[0][0].transcript.toLowerCase().trim());
+  recognition.onerror=()=>stopRecognition();
+  recognition.onend=()=>{ isRecording=false; setStatus('connected'); document.getElementById('recordBtn').classList.remove('active'); document.getElementById('micLabel').textContent='Voice'; };
+  recognition.start();
+}
+
+function handleVoiceCommand(cmd) {
+  stopRecognition();
+  if (cmd.includes('reply')||cmd.includes('respond')) { openReply(); }
+  else if (cmd.includes('unread')||cmd.includes('mark')) { markUnread(); }
+  else if (cmd.includes('file')||cmd.includes('folder')||cmd.includes('move')||cmd.includes('archive')) { openFilePicker(); }
+  else if (cmd.includes('next')||cmd.includes('skip')) { nextThread(); }
+  else if (cmd.includes('inbox')) { showInbox(); }
+  else { showToast('Not recognized — try "Reply", "Unread", "File", or "Next"'); setTimeout(startCommandListening, 800); }
+}
+
+function startFolderListening() {
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if (!SR) return;
+  stopRecognition();
+  recognition=new SR(); recognition.lang='en-US'; recognition.continuous=false; recognition.interimResults=false;
+  recognition.onstart=()=>{ isRecording=true; setStatus('listening','Listening'); document.getElementById('recordBtn').classList.add('active'); };
+  recognition.onresult=(ev)=>{
+    const cmd=ev.results[0][0].transcript.toLowerCase().trim();
+    if (cmd.includes('follow')) fileEmail('Follow Up');
+    else if (cmd.includes('project')) fileEmail('Projects');
+    else if (cmd.includes('client')) fileEmail('Clients');
+    else if (cmd.includes('archive')||cmd.includes('done')) fileEmail('Archive');
+    else { showToast('Not recognized — tap a folder'); stopRecognition(); }
+  };
+  recognition.onerror=()=>stopRecognition();
+  recognition.onend=()=>{ isRecording=false; setStatus('connected'); document.getElementById('recordBtn').classList.remove('active'); };
+  recognition.start();
+}
+
+function startReplyListening() {
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if (!SR) { showToast('Mic unavailable — type your reply in the box'); return; }
+  stopRecognition();
+  recognition=new SR(); recognition.continuous=true; recognition.interimResults=true; recognition.lang='en-US';
+  let finalText='';
+  recognition.onstart=()=>{ isRecording=true; setStatus('listening','Listening'); document.getElementById('recordBtn').classList.add('active'); document.getElementById('replyMicHint').textContent='🔴 Recording... tap mic again to stop'; document.getElementById('replyMicHint').classList.add('recording'); };
+  recognition.onresult=(ev)=>{
+    let interim='', final='';
+    for (let i=ev.resultIndex;i<ev.results.length;i++) {
+      if (ev.results[i].isFinal) final+=ev.results[i][0].transcript+' ';
+      else interim+=ev.results[i][0].transcript;
+    }
+    finalText+=final;
+    document.getElementById('replyTextarea').value=(finalText+interim).trim();
+  };
+  recognition.onerror=(ev)=>{ showToast('Mic error: '+ev.error+' — type instead'); stopRecognition(); };
+  recognition.onend=()=>{ if (isRecording) recognition.start(); };
+  recognition.start();
+}
+
+function stopRecognition() {
+  if (recognition) { recognition.stop(); recognition=null; }
+  isRecording=false; setStatus('connected');
+  document.getElementById('recordBtn').classList.remove('active');
+  document.getElementById('micLabel').textContent='Voice';
+  const hint=document.getElementById('replyMicHint');
+  if (hint) { hint.textContent='🎙 Tap the mic button below to speak, or just type above'; hint.classList.remove('recording'); }
+}
+
+// ── REPLY ──
+function openReply() {
+  appState='replying';
+  const thread=threads[currentThreadIdx];
+  const latest=thread[thread.length-1];
+  document.getElementById('whatsNext').classList.remove('show');
+  document.getElementById('replyTo').textContent='To: '+latest.from.emailAddress.name;
+  document.getElementById('replyTextarea').value='';
+  document.getElementById('replyPanel').classList.add('show');
+  document.getElementById('sentConfirm').classList.remove('show');
+  // Auto-start listening
+  setTimeout(startReplyListening, 300);
+}
+
+function cancelReply() {
+  stopRecognition(); appState='idle';
+  document.getElementById('replyPanel').classList.remove('show');
+  document.getElementById('replyTextarea').value='';
+}
+
+async function sendReply() {
+  stopRecognition();
+  const txt=document.getElementById('replyTextarea').value.trim();
+  if (!txt) { showToast('Type or speak your reply first'); document.getElementById('replyTextarea').focus(); return; }
+
+  const thread=threads[currentThreadIdx];
+  const latest=thread[thread.length-1];
+
+  if (demoMode) {
+    // Full demo confirmation
+    document.getElementById('replyPanel').classList.remove('show');
+    document.getElementById('whatsNext').classList.remove('show');
+    document.getElementById('sentTo').textContent='To: '+latest.from.emailAddress.name+' · Re: '+latest.subject.replace(/^Re:\s*/i,'');
+    document.getElementById('sentBody').textContent=txt;
+    document.getElementById('sentConfirm').classList.add('show');
+    appState='idle';
+    speak('Reply sent to '+latest.from.emailAddress.name+'.');
+    setTimeout(()=>document.getElementById('sentConfirm').classList.remove('show'), 5000);
+    return;
+  }
+
+  if (!accessToken) { showToast('Not connected to Outlook'); return; }
+  try {
+    await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({message:{subject:'Re: '+latest.subject.replace(/^Re:\s*/i,''),body:{contentType:'Text',content:txt},toRecipients:[{emailAddress:latest.from.emailAddress}]}})});
+    showToast('✓ Reply sent!');
+    document.getElementById('replyPanel').classList.remove('show');
+    document.getElementById('whatsNext').classList.remove('show');
+    appState='idle';
+  } catch(err) { showToast('Send failed: '+err.message); }
+}
+
+// ── FILE ──
+function openFilePicker() {
+  appState='filing';
+  document.getElementById('whatsNext').classList.remove('show');
+  document.getElementById('folderPicker').classList.add('show');
+  speak('Which folder? Say Follow Up, Projects, Clients, or Archive.');
+  setTimeout(startFolderListening, 2400);
+}
+
+async function fileEmail(folderName) {
+  stopRecognition(); appState='idle';
+  const thread=threads[currentThreadIdx];
+  document.getElementById('folderPicker').classList.remove('show');
+  if (demoMode) { showToast(`📁 Filed to ${folderName}`); setTimeout(showInbox,1000); return; }
+  if (!accessToken) { showToast('Not connected'); return; }
+  try {
+    const fRes=await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${folderName}'`,{headers:{Authorization:`Bearer ${accessToken}`}});
+    const fData=await fRes.json();
+    let folderId=fData.value?.[0]?.id;
+    if (!folderId) { const cRes=await fetch('https://graph.microsoft.com/v1.0/me/mailFolders',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({displayName:folderName})}); folderId=(await cRes.json()).id; }
+    await Promise.all(thread.map(msg=>fetch(`https://graph.microsoft.com/v1.0/me/messages/${msg.id}/move`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({destinationId:folderId})})));
+    showToast(`📁 Filed to ${folderName}`);
+    threads.splice(currentThreadIdx,1); renderThreads(); setTimeout(showInbox,800);
+  } catch(e) { showToast('Filing failed: '+e.message); }
+}
+
+// ── MARK UNREAD ──
+async function markUnread() {
+  appState='idle';
+  document.getElementById('whatsNext').classList.remove('show');
+  const thread=threads[currentThreadIdx];
+  if (demoMode) { thread.forEach(e=>e.isRead=false); showToast('📩 Marked as unread'); return; }
+  if (!accessToken) { showToast('Not connected'); return; }
+  try {
+    await Promise.all(thread.map(msg=>fetch(`https://graph.microsoft.com/v1.0/me/messages/${msg.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({isRead:false})})));
+    showToast('📩 Marked as unread');
+  } catch(e) { showToast('Failed: '+e.message); }
+}
+
+// ── INIT ──
+window.addEventListener('load',()=>{
+  checkToken();
+  speechSynthesis.onvoiceschanged=()=>populateVoices();
+  setTimeout(populateVoices,500);
+});
+</script>
+</body>
+</html>
