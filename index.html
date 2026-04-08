@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>DriveMail — RMD Group</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
   :root {
     --bg: #ffffff;
@@ -357,15 +358,19 @@
     <div class="login-brand">RMD Group</div>
     <div class="login-title">Drive Mail</div>
     <div class="login-sub">Your inbox, read aloud. Hands-free email for the road.</div>
-    <button class="btn-main" onclick="showConfig()">Connect Outlook</button>
+    <button class="btn-main" onclick="signIn()">Sign in with Microsoft</button>
     <button class="btn-demo" onclick="startDemo()">Try Demo</button>
+    <button class="btn-demo" onclick="showSettings()" style="margin-top:8px">⚙ Settings</button>
     <div class="config-panel" id="configPanel">
-      <div class="config-title">Azure Credentials</div>
-      <label class="field-label">Client ID</label>
-      <input class="field-input" id="clientId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-      <label class="field-label">Tenant ID</label>
-      <input class="field-input" id="tenantId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-      <button class="btn-connect" onclick="connectOutlook()">Connect →</button>
+      <div class="config-title">Anthropic API Key</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.4">
+        Required for AI summaries and reply drafting. Stored only on this device — never sent anywhere except Anthropic. Get one at console.anthropic.com.
+      </div>
+      <label class="field-label">API Key</label>
+      <input class="field-input" id="anthropicKey" type="password" placeholder="sk-ant-...">
+      <button class="btn-connect" onclick="saveSettings()">Save</button>
+      <button class="btn-connect" onclick="clearSettings()" style="background:#999;margin-top:6px">Clear Saved Key</button>
+      <div id="keyStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center"></div>
     </div>
   </div>
 
@@ -600,22 +605,101 @@ function groupIntoThreads(emails) {
     .sort((a,b)=>new Date(b[b.length-1].receivedDateTime)-new Date(a[a.length-1].receivedDateTime));
 }
 
+// ── MSAL CONFIG ──
+const MSAL_CONFIG = {
+  auth: {
+    clientId: '3a10e910-3a2f-44a0-b6de-cec78b4147c0',
+    authority: 'https://login.microsoftonline.com/9ecf5f9b-f37a-432b-b165-1c2d45af84a7',
+    redirectUri: 'https://polite-desert-00631f11e.2.azurestaticapps.net'
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+};
+const MSAL_SCOPES = ['Mail.Read', 'Mail.ReadWrite', 'Mail.Send', 'MailboxFolder.ReadWrite', 'offline_access'];
+let msalInstance = null;
+
 // ── AUTH ──
-function showConfig() { document.getElementById('configPanel').classList.toggle('show'); }
-function startDemo() { demoMode=true; setStatus('connected','Demo'); showScreen('inboxScreen'); loadEmails(); }
-function connectOutlook() {
-  const cid=document.getElementById('clientId').value.trim(), tid=document.getElementById('tenantId').value.trim();
-  if (!cid||!tid) { showToast('Enter your Client ID and Tenant ID'); return; }
-  const redirect=encodeURIComponent(location.href.split('?')[0]);
-  const scope=encodeURIComponent('https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite');
-  location.href=`https://login.microsoftonline.com/${tid}/oauth2/v2.0/authorize?client_id=${cid}&response_type=token&redirect_uri=${redirect}&scope=${scope}&response_mode=fragment`;
+function showSettings() {
+  const panel = document.getElementById('configPanel');
+  panel.classList.toggle('show');
+  const saved = localStorage.getItem('anthropic_api_key');
+  document.getElementById('keyStatus').textContent = saved ? '✓ Key saved on this device' : 'No key saved';
+  if (saved) document.getElementById('anthropicKey').placeholder = '••••••••••• (saved)';
 }
-function checkToken() {
-  if (location.hash.includes('access_token')) {
-    const p=new URLSearchParams(location.hash.substring(1));
-    accessToken=p.get('access_token'); location.hash='';
-    setStatus('connected'); showScreen('inboxScreen'); loadEmails();
+
+function saveSettings() {
+  const key = document.getElementById('anthropicKey').value.trim();
+  if (!key) { showToast('Enter an API key'); return; }
+  if (!key.startsWith('sk-ant-')) { showToast('Key should start with sk-ant-'); return; }
+  localStorage.setItem('anthropic_api_key', key);
+  document.getElementById('anthropicKey').value = '';
+  document.getElementById('anthropicKey').placeholder = '••••••••••• (saved)';
+  document.getElementById('keyStatus').textContent = '✓ Key saved on this device';
+  showToast('API key saved');
+}
+
+function clearSettings() {
+  localStorage.removeItem('anthropic_api_key');
+  document.getElementById('anthropicKey').value = '';
+  document.getElementById('anthropicKey').placeholder = 'sk-ant-...';
+  document.getElementById('keyStatus').textContent = 'No key saved';
+  showToast('API key cleared');
+}
+
+function getApiKey() { return localStorage.getItem('anthropic_api_key'); }
+
+function startDemo() { demoMode=true; setStatus('connected','Demo'); showScreen('inboxScreen'); loadEmails(); }
+
+async function signIn() {
+  try {
+    if (typeof msal === 'undefined') { showToast('Auth library still loading, try again in a moment'); return; }
+    if (!msalInstance) {
+      msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+      await msalInstance.initialize();
+    }
+    const result = await msalInstance.loginPopup({ scopes: MSAL_SCOPES, prompt: 'select_account' });
+    if (result && result.account) {
+      msalInstance.setActiveAccount(result.account);
+      await acquireToken();
+    }
+  } catch (e) {
+    console.error('Sign-in error:', e);
+    showToast('Sign-in failed: ' + (e.message || e.errorMessage || 'unknown'));
   }
+}
+
+async function acquireToken() {
+  try {
+    const account = msalInstance.getActiveAccount();
+    if (!account) return;
+    const result = await msalInstance.acquireTokenSilent({ scopes: MSAL_SCOPES, account });
+    accessToken = result.accessToken;
+    setStatus('connected', account.username);
+    showScreen('inboxScreen');
+    loadEmails();
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      try {
+        const result = await msalInstance.acquireTokenPopup({ scopes: MSAL_SCOPES });
+        accessToken = result.accessToken;
+        setStatus('connected');
+        showScreen('inboxScreen');
+        loadEmails();
+      } catch (e2) { showToast('Token error: ' + e2.message); }
+    } else { showToast('Token error: ' + e.message); }
+  }
+}
+
+async function initAuth() {
+  try {
+    if (typeof msal === 'undefined') { console.warn('MSAL not loaded yet, will init on sign-in'); return; }
+    msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+    await msalInstance.initialize();
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      msalInstance.setActiveAccount(accounts[0]);
+      await acquireToken();
+    }
+  } catch (e) { console.error('Init error:', e); }
 }
 
 // ── LOAD ──
@@ -709,7 +793,9 @@ async function generateSummary(thread) {
   const prompt=`Summarize this email thread for someone driving. Be brief and conversational — like a colleague catching them up. Cover who said what, key points, and any action items for Mike. Under 60 words. No bullet points.\n\nTHREAD:\n${threadText}`;
 
   try {
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error('No API key — open Settings to add one');
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const summary=data.content?.find(b=>b.type==='text')?.text||'';
     if (summary) { currentSummary=summary; document.getElementById('summaryContent').innerHTML=`<div class="summary-text">${summary}</div>`; setStatus('connected'); setTimeout(readSummary,400); }
@@ -940,7 +1026,7 @@ async function markUnread() {
 
 // ── INIT ──
 window.addEventListener('load',()=>{
-  checkToken();
+  setTimeout(initAuth, 300);
   speechSynthesis.onvoiceschanged=()=>populateVoices();
   setTimeout(populateVoices,500);
 });
